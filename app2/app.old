@@ -1,0 +1,24 @@
+from flask import Flask, render_template, request, redirect, session
+from flask_sqlalchemy import SQLAlchemy
+from config import Config
+
+app = Flask(__name__)
+app.config.from_object(Config)
+app.secret_key = 'your-secret-key'
+
+db = SQLAlchemy(app)
+
+from models import User, Message, TopicUnread
+
+@app.route('/')
+def login():
+    return render_template('login.html')
+
+@app.route('/home')
+def home():
+    return render_template('home.html')
+
+# Add logic for login, message saving, etc. later
+
+if __name__ == '__main__':
+    app.run(debug=True)

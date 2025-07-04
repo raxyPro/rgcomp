@@ -1,0 +1,14 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}rcPro Connect{% endblock %}</title>
+    <script src="{{ url_for('static', filename='js/tailwindcdn.js') }}"></script>
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-gray-100 font-sans">
+    {% block content %}{% endblock %}
+</body>
+</html>
