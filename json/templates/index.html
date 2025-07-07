@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>JSON Pass Demo</title>
+</head>
+<body>
+  <h1>Passing JSON from Flask to HTML</h1>
+
+  <h2>Using |tojson</h2>
+  <pre id="json-output">{{ data|tojson }}</pre>
+
+  <h2>Using |safe (shows as raw string, good for already-encoded HTML or JS)</h2>
+  <pre>{{ data|safe }}</pre>
+
+  <h2>Blank JSON (|tojson)</h2>
+  <pre>{{ blank|tojson }}</pre>
+
+  <h2>Blank JSON (|safe)</h2>
+  <pre>{{ blank|safe }}</pre>
+
+  <h2>Using it in JS (from |tojson)</h2>
+  <script>
+    const dataFromServer = {{ data|tojson }};
+    console.log("Data from Flask (JS):", dataFromServer);
+  </script>
+</body>
+</html>
