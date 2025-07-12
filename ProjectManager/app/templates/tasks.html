@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Tasks for Project: {{ project.name }}</h2>
+
+<!-- New Task Row -->
+<form method="POST" class="mb-3">
+    <div class="row g-2">
+        <div class="col"><input type="text" name="description" class="form-control" placeholder="Description" required></div>
+        <div class="col"><input type="date" name="due_date" class="form-control" required></div>
+        <div class="col"><input type="text" name="status" class="form-control" placeholder="Status" required></div>
+        <div class="col"><input type="text" name="team" class="form-control" placeholder="Team" required></div>
+        <div class="col-auto"><button type="submit" class="btn btn-success">Add Task</button></div>
+    </div>
+</form>
+
+<!-- Task Table -->
+<table class="table table-bordered">
+    <thead class="table-light">
+        <tr>
+            <th>ID</th><th>Description</th><th>Due Date</th><th>Status</th><th>Team</th><th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for task in project.tasks %}
+        <tr id="task-row-{{ task.id }}">
+            <form method="POST" action="{{ url_for('tasks.edit_task', id=task.id) }}">
+                <td>{{ task.id }}</td>
+                <td><input type="text" name="description" value="{{ task.description }}" class="form-control"></td>
+                <td><input type="date" name="due_date" value="{{ task.due_date.strftime('%Y-%m-%d') }}" class="form-control"></td>
+                <td><input type="text" name="status" value="{{ task.status }}" class="form-control"></td>
+                <td><input type="text" name="team" value="{{ task.team }}" class="form-control"></td>
+                <td>
+                    <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                    <form method="POST" action="{{ url_for('tasks.delete_task', id=task.id) }}" style="display:inline;">
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this task?')">Delete</button>
+                    </form>
+                </td>
+            </form>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<a href="{{ url_for('projects.projects') }}" class="btn btn-secondary">← Back to Projects</a>
+{% endblock %}

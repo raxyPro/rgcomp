@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Outlook Clone</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        #container {
+            display: flex;
+            height: 100vh;
+        }
+
+        #sidebar {
+            width: 200px;
+            background: #f5f5f5;
+            padding: 10px;
+            overflow-y: auto;
+            border-right: 1px solid #ccc;
+            font-size: 13px;
+        }
+
+        #emailList {
+            width: 550px;
+            background: #ffffff;
+            padding: 10px;
+            overflow-y: auto;
+            border-right: 1px solid #ccc;
+            font-size: 13px;
+        }
+
+        #emailDetails {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            max-width: 500px;
+        }
+
+        ul {
+            list-style-type: none;
+            padding-left: 10px;
+        }
+
+        li {
+            cursor: pointer;
+            margin: 5px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 6px;
+            border-bottom: 1px solid #ddd;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        .tag-btn {
+            margin: 3px;
+            padding: 4px 8px;
+            background: #eee;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .tag-btn:hover {
+            background-color: #ddd;
+        }
+
+        #loadMoreBtn {
+            margin: 10px 0;
+            padding: 6px 12px;
+        }
+
+        #folderInfo {
+            margin-bottom: 8px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+    </style>
+
+    <script>
+        let currentFolderId = null;
+        let currentStoreId = null;
+        let currentOffset = 0;
+        let allTags = new Set();
+        let emailData = [];
+
+        function truncate(str, maxLength) {
+            return str.length > maxLength ? str.slice(0, maxLength - 1) + "…" : str;
+        }
+
+        function formatDate(datetimeStr) {
+            try {
+                const date = new Date(datetimeStr);
+                const day = date.getDate();
+                const month = date.toLocaleString("default", { month: "short" });
+                const year = date.getFullYear().toString().slice(-2);
+                const hour = String(date.getHours()).padStart(2, "0");
+                const minute = String(date.getMinutes()).padStart(2, "0");
+                return `${day} ${month} ${year} ${hour}:${minute}`;
+            } catch (e) {
+                return datetimeStr;
+            }
+        }
+
+        function formatSize(bytes) {
+            const mb = bytes / (1024 * 1024);
+            return mb.toFixed(2) + " MB";
+        }
+
+        async function loadEmails(folderId, storeId, append = false, accountName = '', folderName = '') {
+            try {
+                if (!append) {
+                    currentOffset = 0;
+                    document.getElementById("emailListTable").innerHTML = "";
+                    allTags.clear();
+                    emailData = [];
+                    document.getElementById("folderInfo").textContent = `${accountName} › ${folderName}`;
+                }
+
+                currentFolderId = folderId;
+                currentStoreId = storeId;
+
+                const res = await fetch(`/emails?folder_id=${folderId}&store_id=${storeId}&offset=${currentOffset}`);
+                if (!res.ok) throw new Error("Failed to fetch emails");
+
+                const data = await res.json();
+                currentOffset = data.next_offset;
+
+                const table = document.getElementById("emailListTable");
+
+                data.emails.forEach(email => {
+                    emailData.push(email);
+                    (email.tags || []).forEach(tag => allTags.add(tag));
+
+                    const sender = truncate(email.sender || "", 15);
+                    const subject = truncate(email.subject || "", 30);
+                    const dateStr = formatDate(email.datetime || "");
+                    const sizeMB = formatSize(email.size || 0);
+
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td><a href="#" onclick="loadEmail('${email.entry_id}'); return false;">${sender}</a></td>
+                        <td>${subject}</td>
+                        <td>${dateStr}</td>
+                        <td>${sizeMB}</td>
+                    `;
+                    row.dataset.tags = (email.tags || []).join(",");
+                    table.appendChild(row);
+                });
+
+                renderTags();
+                document.getElementById("loadMoreBtn").style.display = data.has_more ? "block" : "none";
+            } catch (err) {
+                console.error("Error in loadEmails():", err);
+                alert("Unable to load emails. Please check the server log.");
+            }
+        }
+
+        function renderTags() {
+            const tagDiv = document.getElementById("tagsContainer");
+            tagDiv.innerHTML = "";
+            Array.from(allTags).forEach(tag => {
+                const btn = document.createElement("button");
+                btn.className = "tag-btn";
+                btn.textContent = tag;
+                btn.onclick = () => filterByTag(tag);
+                tagDiv.appendChild(btn);
+            });
+        }
+
+        function filterByTag(tag) {
+            const rows = document.querySelectorAll("#emailListTable tr");
+            rows.forEach(row => {
+                const tags = (row.dataset.tags || "").toLowerCase();
+                row.style.display = tags.includes(tag.toLowerCase()) ? "" : "none";
+            });
+        }
+
+        async function loadEmail(entryId) {
+            try {
+                const res = await fetch(`/email/${entryId}`);
+                if (!res.ok) throw new Error("Failed to fetch email");
+
+                const email = await res.json();
+                const panel = document.getElementById("emailDetails");
+                panel.innerHTML = `
+                    <h2>${email.subject}</h2>
+                    <p><strong>From:</strong> ${email.sender}</p>
+                    <p><strong>To:</strong> ${email.to}</p>
+                    <p><strong>CC:</strong> ${email.cc}</p>
+                    <pre style="white-space: pre-wrap;">${email.body}</pre>
+                    <hr>
+                    <form method="POST" action="/move_email">
+                        <input type="hidden" name="email_id" value="${entryId}">
+                        <input type="hidden" name="store_id" value="${currentStoreId}">
+                        <input type="text" name="dest_folder_id" placeholder="Destination Folder ID" style="width: 60%;">
+                        <button type="submit">Move</button>
+                    </form>
+                `;
+            } catch (err) {
+                console.error("Error in loadEmail():", err);
+                alert("Failed to load email content.");
+            }
+        }
+
+        function loadMore() {
+            if (currentFolderId && currentStoreId) {
+                loadEmails(currentFolderId, currentStoreId, true);
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="container">
+        <div id="sidebar">
+            <h3>Folders</h3>
+            {% for acc in accounts %}
+            <strong>{{ acc.name }}</strong>
+            <ul>
+                {% for f in acc.folders %}
+                <li onclick="loadEmails('{{ f.entry_id }}', '{{ f.store_id }}', false, '{{ acc.name }}', '{{ f.name }}')">
+                    {{ f.name }}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endfor %}
+        </div>
+
+        <div id="emailList">
+            <div id="folderInfo"></div>
+            <h3>Email List</h3>
+            <div id="tagsContainer"></div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sender</th>
+                        <th>Subject</th>
+                        <th>Date</th>
+                        <th>Size</th>
+                    </tr>
+                </thead>
+                <tbody id="emailListTable"></tbody>
+            </table>
+            <button id="loadMoreBtn" onclick="loadMore()">Load More</button>
+        </div>
+
+        <div id="emailDetails">
+            <h3>Email Details</h3>
+            <p>Select an email to view it here.</p>
+        </div>
+    </div>
+</body>
+</html>
