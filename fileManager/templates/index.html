@@ -35,32 +35,95 @@
             font-size: 0.9rem;
             color: #666;
         }
+
+        .office-preview {
+            background: #fff;
+            border: 1px solid #dee2e6;
+            padding: 1rem;
+        }
+
+        .custom-video {
+            width: 600px;
+            height: 480px;
+        }
     </style>
 </head>
+
+{% macro render_tree(node) %}
+    <ul class="list-group">
+        <li class="list-group-item">
+            {% if node.type == 'folder' %}
+                <span class="folder-name" style="cursor:pointer; color:#007bff;" onclick="selectFolder('{{ node.path }}')">📁 {{ node.name }}</span>
+            {% else %}
+                {{ node.name }}
+            {% endif %}
+            {% if node.children %}
+                <div style="margin-left:15px;">{% for child in node.children %}{{ render_tree(child) }}{% endfor %}</div>
+            {% endif %}
+        </li>
+    </ul>
+{% endmacro %}
 
 <body class="bg-light">
     <div class="container-fluid h-100">
         <div class="row h-100">
             <!-- Sidebar -->
             <div class="col-3 file-list bg-white p-3">
-                <h5>📁 Files</h5>
-                <form method="POST" action="/" class="input-group mb-3">
-                    <input type="text" class="form-control" name="directory" placeholder="Enter directory path"
-                        value="{{ directory }}">
+                <h5>📁 File/Folder Explorer</h5>
+                <form id="dirForm" method="POST" action="/" class="input-group mb-3">
+                    <input type="text" class="form-control" id="directoryInput" name="directory" placeholder="Enter file or folder path" value="{{ directory }}">
+                    <button type="button" class="btn btn-secondary" onclick="loadTree()">Load</button>
                     <button type="submit" class="btn btn-primary">Open</button>
                 </form>
-                {% if files %}
-                <ul class="list-group">
-                    {% for file in files %}
-                    <li class="list-group-item">
-                        <a href="{{ url_for('view_file', dir=directory, file=file) }}">{{ file }}</a>
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p>No files found.</p>
-                {% endif %}
+                <div class="d-flex align-items-center mb-2">
+                    <span id="toggleTreeBtn" style="cursor:pointer; font-size:1.2em;" onclick="toggleTree()">&#9654; Show Tree</span>
+                </div>
+                <div id="tree-container" style="display:none;">
+                    {% if tree %}
+                        {{ render_tree(tree) }}
+                    {% endif %}
+                </div>
+                <hr>
+                <div id="folder-files">
+                    {% if files %}
+                        <h6>Files in: {{ directory }}</h6>
+                        <ul class="list-group">
+                            {% for file in files %}
+                            <li class="list-group-item">
+                                <a href="{{ url_for('view_file', dir=directory, file=file) }}" style="text-decoration:none; color:#333;">{{ file }}</a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% elif selected_folder %}
+                        <h6>Files in: {{ selected_folder }}</h6>
+                        {% if folder_files %}
+                        <ul class="list-group">
+                            {% for file in folder_files %}
+                            <li class="list-group-item">
+                                {{ file }}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p>No files found in this folder.</p>
+                        {% endif %}
+                    {% endif %}
+                </div>
             </div>
+{% macro render_tree(node) %}
+    <ul class="list-group">
+        <li class="list-group-item">
+            {% if node.type == 'folder' %}
+                <span class="folder-name" style="cursor:pointer; color:#007bff;" onclick="selectFolder('{{ node.path }}')">📁 {{ node.name }}</span>
+            {% else %}
+                {{ node.name }}
+            {% endif %}
+            {% if node.children %}
+                <div style="margin-left:15px;">{% for child in node.children %}{{ render_tree(child) }}{% endfor %}</div>
+            {% endif %}
+        </li>
+    </ul>
+{% endmacro %}
 
             <!-- Preview Pane -->
             <div class="col-9 file-preview p-3">
@@ -88,11 +151,13 @@
                 <iframe src="{{ file_url }}" width="100%" height="90%"></iframe>
                 {% elif filetype == 'html' %}
                 {{ content|safe }}
-                {% elif filetype == 'text' %}
-                <pre class="bg-white border p-3">{{ content }}</pre>
+                {% elif filetype in ['text', 'docx', 'pptx'] %}
+                <pre class="office-preview">{{ content }}</pre>
+                {% elif filetype == 'office' %}
+                <div class="office-preview">{{ content|safe }}</div>
                 {% elif filetype == 'video' %}
                 <div>
-                    <video width="600" height="480" controls autoplay>
+                    <video class="custom-video" controls autoplay>
                         <source src="{{ file_url }}" type="video/mp4">
                         Your browser does not support the video tag.
                     </video>
@@ -122,8 +187,63 @@
                 video.load();
             }
         }
-    </script>
 
+        function selectFolder(folderPath) {
+            // Reload page with selected folder
+            const url = new URL(window.location.href);
+            url.searchParams.set('folder', folderPath);
+            window.location.href = url.toString();
+        }
+
+        function toggleTree() {
+            const treeContainer = document.getElementById('tree-container');
+            const toggleBtn = document.getElementById('toggleTreeBtn');
+            if (treeContainer.style.display === 'none') {
+                treeContainer.style.display = 'block';
+                toggleBtn.innerHTML = '&#9660; Hide Tree';
+            } else {
+                treeContainer.style.display = 'none';
+                toggleBtn.innerHTML = '&#9654; Show Tree';
+            }
+        }
+
+        function loadTree() {
+            const dir = document.getElementById('directoryInput').value;
+            fetch('/get_tree', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'path=' + encodeURIComponent(dir)
+            })
+            .then(response => response.json())
+            .then(data => {
+                const treeContainer = document.getElementById('tree-container');
+                if (data.error) {
+                    treeContainer.innerHTML = '<p>' + data.error + '</p>';
+                } else {
+                    treeContainer.innerHTML = renderTreeHTML(data);
+                }
+            });
+        }
+
+        function renderTreeHTML(node) {
+            let html = '<ul class="list-group">';
+            html += '<li class="list-group-item">';
+            if (node.type === 'folder') {
+                html += `<span class="folder-name" style="cursor:pointer; color:#007bff;" onclick="selectFolder('${node.path}')">📁 ${node.name}</span>`;
+            } else {
+                html += node.name;
+            }
+            if (node.children && node.children.length > 0) {
+                html += '<div style="margin-left:15px;">';
+                for (let child of node.children) {
+                    html += renderTreeHTML(child);
+                }
+                html += '</div>';
+            }
+            html += '</li></ul>';
+            return html;
+        }
+    </script>
 </body>
 
 </html>
